@@ -32,8 +32,11 @@ namespace Greg.Xrm.Command.DataExtractor.Services
 				if (leafList.Count == 0)
 				{
 					// handle circular dependency
-					throw new InvalidOperationException("Circular dependency detected");
-					continue;
+					var (succeeded, errorMessage) = TryFindCycle(tables);
+					if (!succeeded)
+					{
+						return MigrationStrategyResult.Error(errorMessage);
+					}
 				}
 
 
@@ -51,5 +54,32 @@ namespace Greg.Xrm.Command.DataExtractor.Services
 
 
 		private static IReadOnlyList<TableModel> FindLeaves(IReadOnlyList<TableModel> tables) => tables.Where(x => x.IsLeaf).ToList();
+
+
+		private (bool, string) TryFindCycle(IReadOnlyList<TableModel> tables)
+		{
+			var graph = new Graph(tables);
+
+			var cycles = graph.FindAllCycles();
+			if (cycles.Count == 0)
+			{
+				return (false, $"The list contains {tables.Count} tables, but no cycles have been found, and no leafs are present. Please check with your admin.");
+			}
+
+			if (cycles.Count == 1)
+			{
+				return BreakCycle(tables, cycles[0]);
+			}
+
+
+			throw new NotImplementedException();
+
+		}
+
+		private (bool, string) BreakCycle(IReadOnlyList<TableModel> tables, List<string> list)
+		{
+			throw new NotImplementedException();
+		}
 	}
+
 }

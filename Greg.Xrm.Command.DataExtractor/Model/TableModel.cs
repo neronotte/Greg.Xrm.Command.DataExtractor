@@ -1,15 +1,28 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
-namespace Greg.Xrm.Command.DataExtractor.Model
+﻿namespace Greg.Xrm.Command.DataExtractor.Model
 {
 	public class TableModel
 	{
 		private List<LookupFieldModel> allFields;
 		private List<LookupFieldModel> filteredFields;
+
+
+		public static TableModel Create(string tableName, params string[] lookup)
+		{
+			if (lookup.Length % 2 != 0)
+			{
+				throw new ArgumentException("The 'lookup' parameter must contain an even number of elements.");
+			}
+
+			var fields = new List<LookupFieldModel>();
+			for (int i = 0; i < lookup.Length; i += 2)
+			{
+				fields.Add(new LookupFieldModel(lookup[i], lookup[i+1]));
+			}
+
+
+			return new TableModel(tableName, fields);
+		}
+
 
 		public TableModel(string tableName, List<LookupFieldModel> fields)
 		{
