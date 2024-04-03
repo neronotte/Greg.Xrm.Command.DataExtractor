@@ -14,21 +14,21 @@
 			this.nodes = nodes;
 		}
 
-		public List<List<string>> FindAllCycles()
+		public List<List<Node>> FindAllCycles()
 		{
 			var visited = new HashSet<string>();
-			var allCycles = new List<List<string>>();
+			var allCycles = new List<List<Node>>();
 
 			foreach (var node in nodes.Values)
 			{
-				var path = new List<string>();
+				var path = new List<Node>();
 				FindAllCycles(node, visited, path, allCycles);
 			}
 
 			return allCycles;
 		}
 
-		private void FindAllCycles(TableModel node, HashSet<string> visited, List<string> path, List<List<string>> allCycles)
+		private void FindAllCycles(TableModel node, HashSet<string> visited, List<Node> path, List<List<Node>> allCycles)
 		{
 			visited.Add(node.Name);
 
@@ -36,7 +36,7 @@
 			{
 				var nextNodeName = lookup.TableName;
 				var columnName = node.Name + "." + lookup.ColumnName;
-				path.Add(columnName);
+				path.Add(new Node(node.Name, lookup.ColumnName));
 
 				if (!nodes.ContainsKey(nextNodeName))
 				{
@@ -45,15 +45,16 @@
 
 				var nextNode = nodes[nextNodeName];
 
+				Node? pathElement;
 				if (!visited.Contains(nextNodeName))
 				{
 					FindAllCycles(nextNode, visited, path, allCycles);
 				}
-				else if (path.Find(x => x.StartsWith(nextNodeName + ".")) != null)
+				else if ((pathElement = path.Find(x => x.Table == nextNodeName)) != null)
 				{
 					// Found a cycle
-					var cycle = new List<string>();
-					for (int i = path.IndexOf(path.Find(x => x.StartsWith(nextNodeName + ".")) ?? string.Empty); 
+					var cycle = new List<Node>();
+					for (int i = path.IndexOf(pathElement); 
 						i < path.Count; 
 						i++)
 					{
@@ -67,4 +68,6 @@
 
 		}
 	}
+
+	public record Node(string Table, string Column);
 }
