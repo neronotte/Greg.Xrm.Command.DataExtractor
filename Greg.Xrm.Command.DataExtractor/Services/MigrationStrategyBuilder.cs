@@ -1,4 +1,6 @@
 ﻿using Greg.Xrm.Command.DataExtractor.Model;
+using Microsoft.Xrm.Sdk.Query;
+using System.Runtime.CompilerServices;
 using System.Text;
 
 namespace Greg.Xrm.Command.DataExtractor.Services
@@ -13,8 +15,11 @@ namespace Greg.Xrm.Command.DataExtractor.Services
 			var result = new MigrationStrategyResult();
 			var tablesToMap = new List<Table>(tables);
 
+			//var iterationCount = 0;
 			while (tablesToMap.Count > 0 && !result.HasError)
 			{
+				//result.MigrationActions.Add(new MigrationActionLog($"*** Iteration {++iterationCount} ***"));
+
 				var leafList = FindLeaves(tablesToMap);
 				if (leafList.Count > 0)
 				{
@@ -95,7 +100,7 @@ namespace Greg.Xrm.Command.DataExtractor.Services
 			var cycles = graph.FindAllCycles();
 			if (cycles.Count == 0)
 			{
-				result.SetError( $"The list contains {tables.Count} tables, but no cycles have been found, and no leafs are present. Please check with your admin.");
+				result.SetError($"The list contains {tables.Count} tables, but no cycles have been found, and no leafs are present. Please check with your admin.");
 				return false;
 			}
 
@@ -104,10 +109,34 @@ namespace Greg.Xrm.Command.DataExtractor.Services
 				return TryBreakCycle(tables, cycles[0], result);
 			}
 
-			// TODO: handle multiple cycles
+			var autoCyclesSelfContained = cycles.Where(x => x.IsAutoCycle && x.IsSelfContained).ToList();
+			if (autoCyclesSelfContained.Count > 0)
+			{
+				foreach (var cycle in autoCyclesSelfContained)
+				{
+					if (!TryBreakCycle(tables, cycle, result))
+						return false;
+				}
+
+				return true;
+			}
+
+			var selfContainedCycles = cycles.Where(x => x.IsSelfContained).ToList();
+			if (selfContainedCycles.Count > 0)
+			{
+				foreach (var cycle in selfContainedCycles)
+				{
+					if (!TryBreakCycle(tables, cycle, result))
+						return false;
+				}
+
+				return true;
+			}
+
+
 
 			var sb = new StringBuilder();
-			sb.AppendLine($"The list contains {tables.Count} tables, but {cycles.Count} cycles have been found: ");
+			sb.AppendLine($"The list contains still {tables.Count} tables, but {cycles.Count} cycle{(cycles.Count > 1 ? "s have" : "has")} been found that we don't know how to manage: ");
 			foreach (var cycle in cycles)
 			{
 				sb.AppendLine($"  - {string.Join(", ", cycle.Select(x => x.ToString()))}");
@@ -121,22 +150,83 @@ namespace Greg.Xrm.Command.DataExtractor.Services
 
 
 
-		private static bool TryBreakCycle(List<Table> tables, List<Node> loop, MigrationStrategyResult result)
+		private static bool TryBreakCycle(List<Table> tables, Cycle loop, MigrationStrategyResult result)
 		{
+			if (loop.IsAutoCycle)
+			{
+				var item = loop[0];
+				var itemColumns = item.Columns
+					.Select(x => $"{x} ({item.ToTable})")
+					.ToArray();
+
+				result.Add(new MigrationActionTableWithoutColumn(item.FromTable, string.Join(", ", itemColumns)));
+				result.Add(new MigrationActionUpdateTableColumn(item.FromTable, string.Join(", ", itemColumns)));
+
+				tables.Remove(tables.First(x => string.Equals(x.Name, item.FromTable, StringComparison.OrdinalIgnoreCase)));
+				foreach (var table in tables)
+				{
+					table.RemoveLookupsTowardsTables(new[] { item.FromTable });
+				}
+
+				return true;
+			}
+
+
+
 			IMigrationAction? lastMigrationAction = null;
 			for (int i = 0; i < loop.Count; i++)
 			{
 				var item = loop[i];
 
+				var tableToImport = tables.Find(x => string.Equals(x.Name, item.FromTable, StringComparison.OrdinalIgnoreCase));
+				if (tableToImport == null)
+				{
+					result.SetError($"Table {item.FromTable} not found in the list of tables.");
+					return false;
+				}
+
+				var itemColumns = item.Columns
+					.Select(x => $"{x} ({item.ToTable})")
+					.ToArray();
+
+
 				if (i == 0)
 				{
-					result.Add(new MigrationActionTableWithoutColumn(item.FromTable, string.Join(", ", item.Columns)));
-					lastMigrationAction = new MigrationActionUpdateTableColumn(item.ToTable, string.Join(", ", item.Columns));
+					if (tableToImport.HasAutoCycle)
+					{
+						var columns1 = (tableToImport.AutoCycle?.Columns ?? Array.Empty<string>())
+							.Select(x => $"{x} ({tableToImport.AutoCycle?.TableName})")
+								.ToArray();
+						var columns2 = columns1
+							.Union(itemColumns)
+							.ToArray();
+
+						result.Add(new MigrationActionTableWithoutColumn(item.FromTable, string.Join(", ", columns2)));
+						result.Add(new MigrationActionUpdateTableColumn(item.FromTable, string.Join(", ", columns1)));
+						lastMigrationAction = new MigrationActionUpdateTableColumn(item.FromTable, string.Join(", ", itemColumns));
+					}
+					else
+					{
+						result.Add(new MigrationActionTableWithoutColumn(item.FromTable, string.Join(", ", itemColumns)));
+						lastMigrationAction = new MigrationActionUpdateTableColumn(item.FromTable, string.Join(", ", itemColumns));
+					}
 				}
 				else
 				{
-					result.Add(item.FromTable);
-                }
+					if (tableToImport.HasAutoCycle)
+					{
+						var columns1 = (tableToImport.AutoCycle?.Columns ?? Array.Empty<string>())
+							.Select(x => $"{x} ({tableToImport.AutoCycle?.TableName})")
+								.ToArray();
+
+						result.Add(new MigrationActionTableWithoutColumn(item.FromTable, string.Join(", ", columns1)));
+						result.Add(new MigrationActionUpdateTableColumn(item.FromTable, string.Join(", ", columns1)));
+					}
+					else
+					{
+						result.Add(item.FromTable);
+					}
+				}
 
 				tables.Remove(tables.First(x => string.Equals(x.Name, item.FromTable, StringComparison.OrdinalIgnoreCase)));
 				foreach (var table in tables)

@@ -53,6 +53,20 @@
 
 		public bool IsLeaf => this.Fields.Count == 0;
 
+
+		public bool HasAutoCycle
+		{
+			get 
+			{
+				return this.AutoCycle != null;
+			}
+		}
+
+		public AggregatedLookupFieldModel? AutoCycle
+		{
+			get => this.Fields.FirstOrDefault(x => x.TableName == this.Name);
+		}
+
 		public void RemoveLookupsTowardsTables(IReadOnlyCollection<string> relatedTableNames)
 		{
 			this.filteredFields.RemoveAll(f => relatedTableNames.Contains(f.TableName, StringComparer.OrdinalIgnoreCase));

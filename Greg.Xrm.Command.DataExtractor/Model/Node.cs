@@ -4,7 +4,7 @@ using System.Diagnostics.CodeAnalysis;
 namespace Greg.Xrm.Command.DataExtractor.Model
 {
 	[DebuggerDisplay("{FromTable} --> {ToTable}")]
-	public class Node : IEqualityComparer<Node>
+	public class Node
 	{
 		public Node(string fromTable, string[] columns, string toTable)
 		{
@@ -40,20 +40,6 @@ namespace Greg.Xrm.Command.DataExtractor.Model
 		public override int GetHashCode()
 		{
 			return this.FromTable.GetHashCode() ^ this.ToTable.GetHashCode();
-		}
-
-
-		public bool Equals(Node? x, Node? y)
-		{
-			if (x == null && y == null) return true;
-			if (x == null || y == null) return false;
-
-			return x.Equals(y);
-		}
-
-		public int GetHashCode([DisallowNull] Node obj)
-		{
-			return obj.GetHashCode();
 		}
 
 

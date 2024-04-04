@@ -8,22 +8,24 @@
 		{
 		}
 
+
+
 		public Graph(Dictionary<string, Table> nodes)
 		{
 			this.nodes = nodes;
 		}
 
 
+		public IDictionary<string, Table> Nodes => nodes;
 
 
 
 
 
-
-		public List<List<Node>> FindAllCycles()
+		public List<Cycle> FindAllCycles()
 		{
 			var visited = new HashSet<string>();
-			var allCycles = new List<List<Node>>();
+			var allCycles = new List<Cycle>();
 
 			foreach (var node in nodes.Values)
 			{
@@ -31,10 +33,10 @@
 				FindAllCycles(node, visited, path, allCycles);
 			}
 
-			return allCycles.Distinct(new NodeListComparer()).ToList();
+			return allCycles.Distinct().ToList();
 		}
 
-		private void FindAllCycles(Table node, HashSet<string> visited, List<Node> path, List<List<Node>> allCycles)
+		private void FindAllCycles(Table node, HashSet<string> visited, List<Node> path, List<Cycle> allCycles)
 		{
 			visited.Add(node.Name);
 
@@ -58,7 +60,7 @@
 				else if ((pathElement = path.Find(x => x.FromTable == nextNodeName)) != null)
 				{
 					// Found a cycle
-					var cycle = new List<Node>();
+					var cycle = new Cycle(this);
 					for (int i = path.IndexOf(pathElement); 
 						i < path.Count; 
 						i++)
