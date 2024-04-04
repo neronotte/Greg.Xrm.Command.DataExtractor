@@ -10,9 +10,9 @@ namespace Greg.Xrm.Command.DataExtractor.TestSuite
 		{
 			var nodes = new []
 			{
-				TableModel.Create("a", "bid", "b"),
-				TableModel.Create("b", "cid", "c"),
-				TableModel.Create("c")
+				Table.Create("a", "bid", "b"),
+				Table.Create("b", "cid", "c"),
+				Table.Create("c")
 			};
 
 			var graph = new Graph(nodes);
@@ -26,16 +26,16 @@ namespace Greg.Xrm.Command.DataExtractor.TestSuite
 		{
 			var nodes = new[]
 			{
-				TableModel.Create("a", "bid", "b"),
-				TableModel.Create("b", "cid", "c"),
-				TableModel.Create("c", "aid", "a")
+				Table.Create("a", "bid", "b"),
+				Table.Create("b", "cid", "c"),
+				Table.Create("c", "aid", "a")
 			};
 
 			var graph = new Graph(nodes);
 			var cycles = graph.FindAllCycles();
 
 			Assert.AreEqual(1, cycles.Count);
-			CollectionAssert.AreEquivalent(new List<Node> { new("a", "bid"), new("b", "cid"), new("c", "aid") }, cycles[0]);
+			CollectionAssert.AreEquivalent(new List<Node> { new("a", "bid", "b"), new("b", "cid", "c"), new("c", "aid", "a") }, cycles[0]);
 		}
 
 		[TestMethod]
@@ -43,17 +43,17 @@ namespace Greg.Xrm.Command.DataExtractor.TestSuite
 		{
 			var nodes = new[]
 			{
-				TableModel.Create("a", "bid", "b", "did", "d"),
-				TableModel.Create("b", "cid", "c"),
-				TableModel.Create("c", "aid", "a"),
-				TableModel.Create("d", "eid", "e")
+				Table.Create("a", "bid", "b", "did", "d"),
+				Table.Create("b", "cid", "c"),
+				Table.Create("c", "aid", "a"),
+				Table.Create("d", "eid", "e")
 			};
 
 			var graph = new Graph(nodes);
 			var cycles = graph.FindAllCycles();
 
 			Assert.AreEqual(1, cycles.Count);
-			CollectionAssert.AreEquivalent(new List<Node> { new("a", "bid"), new("b", "cid"), new("c", "aid") }, cycles[0]);
+			CollectionAssert.AreEquivalent(new List<Node> { new("a", "bid", "b"), new("b", "cid", "c"), new("c", "aid", "a") }, cycles[0]);
 		}
 
 		[TestMethod]
@@ -61,17 +61,17 @@ namespace Greg.Xrm.Command.DataExtractor.TestSuite
 		{
 			var nodes = new[]
 			{
-				TableModel.Create("a", "bid", "b", "cid", "c"),
-				TableModel.Create("b", "aid", "a"),
-				TableModel.Create("c", "aid", "a")
+				Table.Create("a", "bid", "b", "cid", "c"),
+				Table.Create("b", "aid", "a"),
+				Table.Create("c", "aid", "a")
 			};
 
 			var graph = new Graph(nodes);
 			var cycles = graph.FindAllCycles();
 
 			Assert.AreEqual(2, cycles.Count);
-			CollectionAssert.AreEquivalent(new List<Node> { new("a", "bid"), new("b", "aid") }, cycles[0]);
-			CollectionAssert.AreEquivalent(new List<Node> { new ("a", "cid"), new("c", "aid") }, cycles[1]);
+			CollectionAssert.AreEquivalent(new List<Node> { new("a", "bid", "b"), new("b", "aid", "a") }, cycles[0]);
+			CollectionAssert.AreEquivalent(new List<Node> { new ("a", "cid", "c"), new("c", "aid", "a") }, cycles[1]);
 		}
 	}
 }

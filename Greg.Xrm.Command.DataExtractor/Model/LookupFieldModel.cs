@@ -2,8 +2,8 @@
 {
 	public class LookupFieldModel
 	{
-        public LookupFieldModel(string columnName, string tableName)
-        {
+		public LookupFieldModel(string columnName, string tableName)
+		{
 			if (string.IsNullOrWhiteSpace(columnName))
 			{
 				throw new ArgumentNullException(nameof(columnName), $"'{nameof(columnName)}' cannot be null or empty.");
@@ -18,8 +18,14 @@
 			TableName = tableName.ToLowerInvariant();
 		}
 
-        public string ColumnName { get;  }
+		public string ColumnName { get; }
 		public string TableName { get; }
+
+
+		public override string ToString()
+		{
+			return $"{ColumnName} ({TableName})";
+		}
 	}
 
 }

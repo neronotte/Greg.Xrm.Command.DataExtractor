@@ -25,7 +25,7 @@
 
 		public override string ToString()
 		{
-			return $"Update table <{TableName}> to set column <{ColumnName}>";
+			return $"Update table <{TableName}> to set column(s) <{ColumnName}>";
 		}
 	}
 }

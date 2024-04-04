@@ -1,0 +1,12 @@
+{
+  "profiles": {
+    "Greg.Xrm.Command.DataExtractor": {
+      "commandName": "Project"
+    },
+    "Profile 1": {
+      "commandName": "Executable",
+      "executablePath": "pacx",
+      "commandLineArgs": "data -skip --plugin \"C:\\Sources\\Greg\\Greg.Xrm.Command.DataExtractor\\Greg.Xrm.Command.DataExtractor\\bin\\Debug\\net7.0\\Greg.Xrm.Command.DataExtractor.dll\""
+    }
+  }
+}

@@ -25,7 +25,7 @@
 
 		public override string ToString()
 		{
-			return $"Import table <{TableName}> without column <{ColumnName}>";
+			return $"Import table <{TableName}> without column(s) <{ColumnName}>";
 		}
 	}
 }
