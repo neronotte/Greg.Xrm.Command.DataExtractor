@@ -2,5 +2,6 @@
 {
 	public interface IMigrationAction
 	{
+		string TableName { get; }
 	}
 }

@@ -22,6 +22,21 @@
 
 		public string ColumnName { get; }
 
+		public string[] GetRelatedTableNames()
+		{
+			return this.ColumnName
+				.Split(",")
+				.Select(x => x.Trim())
+				.Select(x =>
+				{
+					var startIndex = x.IndexOf("(") + 1;
+					var len = x.IndexOf(")") - startIndex;
+					return x.Substring(startIndex, len);
+				})
+				.Distinct()
+				.ToArray();
+		}
+
 
 		public override string ToString()
 		{

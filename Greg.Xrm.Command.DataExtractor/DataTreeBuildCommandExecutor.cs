@@ -143,9 +143,49 @@ namespace Greg.Xrm.Command.DataExtractor
 			if (result.MigrationActions.Count > 0)
 			{
 				this.output.WriteLine($"The migration strategy is:");
+
+				var padding = result.MigrationActions.Count.ToString().Length;
+
+				var i = 0;
 				foreach (var migrationAction in result.MigrationActions)
 				{
-					this.output.WriteLine($"  - {migrationAction}");
+                    if (migrationAction is MigrationActionLog)
+                    {
+						if (command.Verbose)
+						{
+							this.output.WriteLine(migrationAction, ConsoleColor.Cyan);
+						}
+
+						continue;
+					}
+
+
+                    var additionalInfo = string.Empty;
+					if (command.Verbose)
+					{
+						var tableName = migrationAction.TableName;
+						var table = tables.Find(x => string.Equals(x.Name, tableName, StringComparison.OrdinalIgnoreCase));
+
+						var dependsOn = table?.OriginalFields.Select(x => x.TableName).Distinct().ToArray() ?? Array.Empty<string>();
+						if (migrationAction is MigrationActionTableWithoutColumn ma)
+						{
+							dependsOn = dependsOn.Except(ma.GetRelatedTableNames() ).ToArray();
+						}
+						if (migrationAction is MigrationActionUpdateTableColumn ma2)
+						{
+							dependsOn = ma2.GetRelatedTableNames();
+						}
+						if (dependsOn.Length > 0)
+						{
+							additionalInfo = $" (depends on: {string.Join(", ", dependsOn.Order())})";
+						}
+					}
+
+
+					i++;
+					this.output.Write($"  STEP {i.ToString().PadLeft(padding)}) ", ConsoleColor.DarkGray);
+					this.output.Write(migrationAction);
+					this.output.WriteLine(additionalInfo, ConsoleColor.DarkGray);
 				}
 			}
 

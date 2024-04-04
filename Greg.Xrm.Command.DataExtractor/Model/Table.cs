@@ -2,7 +2,7 @@
 {
 	public class Table
 	{
-		private readonly List<AggregatedLookupFieldModel> allFields;
+		private readonly List<AggregatedLookupFieldModel> originalFields;
 		private readonly List<AggregatedLookupFieldModel> filteredFields;
 
 
@@ -39,15 +39,15 @@
 				.ToList();
 
 
-			this.allFields = aggregatedFields;
-			this.filteredFields = new List<AggregatedLookupFieldModel>(this.allFields);
+			this.originalFields = aggregatedFields;
+			this.filteredFields = new List<AggregatedLookupFieldModel>(this.originalFields);
 		}
 
 
 
 		public string Name { get; }
 
-		public IReadOnlyList<AggregatedLookupFieldModel> OriginalFields => this.allFields;
+		public IReadOnlyList<AggregatedLookupFieldModel> OriginalFields => this.originalFields;
 
 		public IReadOnlyList<AggregatedLookupFieldModel> Fields => this.filteredFields;
 
@@ -67,8 +67,13 @@
 			get => this.Fields.FirstOrDefault(x => x.TableName == this.Name);
 		}
 
-		public void RemoveLookupsTowardsTables(IReadOnlyCollection<string> relatedTableNames)
+		public void RemoveLookupsTowardsTables(IReadOnlyCollection<string> relatedTableNames, bool forceOriginal = false)
 		{
+			if (forceOriginal)
+			{
+				this.originalFields.RemoveAll(f => relatedTableNames.Contains(f.TableName, StringComparer.OrdinalIgnoreCase));
+			}
+
 			this.filteredFields.RemoveAll(f => relatedTableNames.Contains(f.TableName, StringComparer.OrdinalIgnoreCase));
 		}
 

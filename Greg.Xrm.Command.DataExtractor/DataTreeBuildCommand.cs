@@ -14,5 +14,8 @@ namespace Greg.Xrm.Command.DataExtractor
 
 		[Option("skip-missing-tables", "skip", HelpText = "If true, the command will not fail if some tables are missing in the solution. The missing tables will be skipped.", DefaultValue = false)]
 		public bool SkipMissingTables { get; set; } = false;
+
+		[Option("verbose", "v", HelpText = "If true, the command will output more information about the export process.", DefaultValue = false)]
+		public bool Verbose { get; set; } = false;
 	}
 }

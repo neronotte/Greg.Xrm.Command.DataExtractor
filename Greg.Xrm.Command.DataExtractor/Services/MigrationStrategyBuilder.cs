@@ -15,10 +15,10 @@ namespace Greg.Xrm.Command.DataExtractor.Services
 			var result = new MigrationStrategyResult();
 			var tablesToMap = new List<Table>(tables);
 
-			//var iterationCount = 0;
+			var iterationCount = 0;
 			while (tablesToMap.Count > 0 && !result.HasError)
 			{
-				//result.MigrationActions.Add(new MigrationActionLog($"*** Iteration {++iterationCount} ***"));
+				result.MigrationActions.Add(new MigrationActionLog($"*** Iteration {++iterationCount} ***"));
 
 				var leafList = FindLeaves(tablesToMap);
 				if (leafList.Count > 0)
@@ -254,7 +254,7 @@ namespace Greg.Xrm.Command.DataExtractor.Services
 					}
 				}
 
-				table.RemoveLookupsTowardsTables(tablesNotPresent);
+				table.RemoveLookupsTowardsTables(tablesNotPresent, true);
 			}
 		}
 	}

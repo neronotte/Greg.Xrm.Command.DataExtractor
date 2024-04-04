@@ -9,6 +9,7 @@
 			this.message = message;
 		}
 
+		public string TableName => string.Empty;
 
 		public override string ToString()
 		{
