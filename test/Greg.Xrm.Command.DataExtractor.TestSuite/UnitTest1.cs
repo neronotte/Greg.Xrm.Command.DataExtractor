@@ -1,3 +1,4 @@
+using Greg.Xrm.Command.DataExtractor.GraphManipulation;
 using Greg.Xrm.Command.DataExtractor.Model;
 
 namespace Greg.Xrm.Command.DataExtractor.TestSuite
@@ -8,14 +9,14 @@ namespace Greg.Xrm.Command.DataExtractor.TestSuite
 		[TestMethod]
 		public void TestFindAllCycles_NoCycles()
 		{
-			var nodes = new []
-			{
-				Table.Create("a", "bid", "b"),
-				Table.Create("b", "cid", "c"),
-				Table.Create("c")
-			};
+			var graph = new DirectedGraph<TableModel>();
+			graph.AddTable("a");
+			graph.AddTable("b");
+			graph.AddTable("c");
+			graph.AddRelation("a", "b", "bid");
+			graph.AddRelation("b", "c", "cid");
 
-			var graph = new Graph(nodes);
+
 			var cycles = graph.FindAllCycles();
 
 			Assert.AreEqual(0, cycles.Count);
@@ -24,54 +25,92 @@ namespace Greg.Xrm.Command.DataExtractor.TestSuite
 		[TestMethod]
 		public void TestFindAllCycles_OneCycle()
 		{
-			var nodes = new[]
-			{
-				Table.Create("a", "bid", "b"),
-				Table.Create("b", "cid", "c"),
-				Table.Create("c", "aid", "a")
-			};
+			var graph = new DirectedGraph<TableModel>();
+			graph.AddTable("a");
+			graph.AddTable("b");
+			graph.AddTable("c");
+			graph.AddRelation("a", "b", "bid");
+			graph.AddRelation("b", "c", "cid");
+			graph.AddRelation("c", "a", "aid");
 
-			var graph = new Graph(nodes);
 			var cycles = graph.FindAllCycles();
 
 			Assert.AreEqual(1, cycles.Count);
-			CollectionAssert.AreEquivalent(new List<Node> { new("a", "bid", "b"), new("b", "cid", "c"), new("c", "aid", "a") }, cycles[0]);
+			var cycle = cycles[0];
+			Assert.AreEqual("a", cycle[0].From.Content.Key);
+			Assert.AreEqual("b", cycle[0].To.Content.Key);
+			Assert.AreEqual("b", cycle[1].From.Content.Key);
+			Assert.AreEqual("c", cycle[1].To.Content.Key);
+			Assert.AreEqual("c", cycle[2].From.Content.Key);
+			Assert.AreEqual("a", cycle[2].To.Content.Key);
 		}
+
+
+
 
 		[TestMethod]
 		public void TestFindAllCycles_OneCycle_2()
 		{
-			var nodes = new[]
-			{
-				Table.Create("a", "bid", "b", "did", "d"),
-				Table.Create("b", "cid", "c"),
-				Table.Create("c", "aid", "a"),
-				Table.Create("d", "eid", "e")
-			};
+			var graph = new DirectedGraph<TableModel>();
+			graph.AddTable("a");
+			graph.AddTable("b");
+			graph.AddTable("c");
+			graph.AddTable("d");
+			graph.AddTable("e");
+			graph.AddRelation("a", "b", "bid");
+			graph.AddRelation("a", "d", "did");
+			graph.AddRelation("b", "c", "cid");
+			graph.AddRelation("c", "a", "aid");
+			graph.AddRelation("d", "e", "eid");
 
-			var graph = new Graph(nodes);
 			var cycles = graph.FindAllCycles();
 
 			Assert.AreEqual(1, cycles.Count);
-			CollectionAssert.AreEquivalent(new List<Node> { new("a", "bid", "b"), new("b", "cid", "c"), new("c", "aid", "a") }, cycles[0]);
+
+			var cycle = cycles[0];
+			Assert.AreEqual("a", cycle[0].From.Content.Key);
+			Assert.AreEqual("b", cycle[0].To.Content.Key);
+			Assert.AreEqual("b", cycle[1].From.Content.Key);
+			Assert.AreEqual("c", cycle[1].To.Content.Key);
+			Assert.AreEqual("c", cycle[2].From.Content.Key);
+			Assert.AreEqual("a", cycle[2].To.Content.Key);
 		}
+
+
+
 
 		[TestMethod]
 		public void TestFindAllCycles_MultipleCycles()
 		{
-			var nodes = new[]
-			{
-				Table.Create("a", "bid", "b", "cid", "c"),
-				Table.Create("b", "aid", "a"),
-				Table.Create("c", "aid", "a")
-			};
+			var graph = new DirectedGraph<TableModel>();
+			graph.AddTable("a");
+			graph.AddTable("b");
+			graph.AddTable("c");
+			graph.AddRelation("a", "b", "bid");
+			graph.AddRelation("a", "c", "cid");
+			graph.AddRelation("b", "a", "aid");
+			graph.AddRelation("c", "a", "aid");
 
-			var graph = new Graph(nodes);
+
 			var cycles = graph.FindAllCycles();
 
 			Assert.AreEqual(2, cycles.Count);
-			CollectionAssert.AreEquivalent(new List<Node> { new("a", "bid", "b"), new("b", "aid", "a") }, cycles[0]);
-			CollectionAssert.AreEquivalent(new List<Node> { new ("a", "cid", "c"), new("c", "aid", "a") }, cycles[1]);
+
+
+			Assert.AreEqual(2, cycles.Count);
+
+			var cycle = cycles[0];
+			Assert.AreEqual("a", cycle[0].From.Content.Key);
+			Assert.AreEqual("b", cycle[0].To.Content.Key);
+			Assert.AreEqual("b", cycle[1].From.Content.Key);
+			Assert.AreEqual("a", cycle[1].To.Content.Key);
+
+			cycle = cycles[1];
+			Assert.AreEqual("a", cycle[0].From.Content.Key);
+			Assert.AreEqual("c", cycle[0].To.Content.Key);
+			Assert.AreEqual("c", cycle[1].From.Content.Key);
+			Assert.AreEqual("a", cycle[1].To.Content.Key);
 		}
 	}
+
 }

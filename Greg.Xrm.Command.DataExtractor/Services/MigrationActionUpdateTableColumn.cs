@@ -2,7 +2,7 @@
 {
 	public class MigrationActionUpdateTableColumn : IMigrationAction
 	{
-		public MigrationActionUpdateTableColumn(string tableName, string columnName)
+		public MigrationActionUpdateTableColumn(string? tableName, string columnName)
 		{
 			if (string.IsNullOrEmpty(tableName))
 			{

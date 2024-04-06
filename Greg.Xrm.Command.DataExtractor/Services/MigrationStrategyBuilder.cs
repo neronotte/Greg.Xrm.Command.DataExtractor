@@ -1,112 +1,68 @@
-﻿using Greg.Xrm.Command.DataExtractor.Model;
-using Microsoft.Xrm.Sdk.Query;
-using System.Runtime.CompilerServices;
+﻿using Greg.Xrm.Command.DataExtractor.GraphManipulation;
+using Greg.Xrm.Command.DataExtractor.Model;
 using System.Text;
 
 namespace Greg.Xrm.Command.DataExtractor.Services
 {
 	public static class MigrationStrategyBuilder
 	{
-		public static MigrationStrategyResult Build(IReadOnlyList<Table> tables)
+		public static MigrationStrategyResult Build(DirectedGraph<TableModel> graph)
 		{
 			// find the leaf tables
 			// if there is no leaf table, but we have then we have a circular dependency
 
 			var result = new MigrationStrategyResult();
-			var tablesToMap = new List<Table>(tables);
+			var currentGraph = graph;
 
 			var iterationCount = 0;
-			while (tablesToMap.Count > 0 && !result.HasError)
+			while (currentGraph.HasNodes && !result.HasError)
 			{
 				result.MigrationActions.Add(new MigrationActionLog($"*** Iteration {++iterationCount} ***"));
 
-				var leafList = FindLeaves(tablesToMap);
+				var leafList = currentGraph.GetLeaves();
 				if (leafList.Count > 0)
 				{
-					foreach (var leaf in leafList.OrderBy(x => x.Name))
+					foreach (var leaf in leafList.OrderBy(x => x.Key))
 					{
-						result.Add(leaf.Name);
-						tablesToMap.Remove(leaf);
+						result.Add(leaf.ToString());
 					}
 
-					foreach (var table in tablesToMap)
-					{
-						table.RemoveLookupsTowardsTables(leafList.Select(x => x.Name).ToList());
-					}
+					currentGraph = currentGraph.Clone().RemoveNodes(leafList);
 				}
 				else
 				{
 					// handle circular dependency
-					var succeeded = TryManageCycles(tablesToMap, result);
+					var succeeded = TryManageCycles(currentGraph, result, out var newGraph);
 					if (!succeeded)
 					{
 						return result;
 					}
+
+					currentGraph = newGraph;
 				}
 			}
 
 			return result;
 		}
 
-		public static bool TryValidateRelationships(IReadOnlyList<Table> tables, out string errorMessage)
+
+
+
+
+		private static bool TryManageCycles(DirectedGraph<TableModel> graph, MigrationStrategyResult result, out DirectedGraph<TableModel> newGraph)
 		{
-			var result = new Dictionary<string, HashSet<string>>();
-
-
-			foreach (var table in tables)
-			{
-				foreach (var referencedTable in table.Fields.Select(x => x.TableName))
-				{
-					if (tables.Any(x => string.Equals(x.Name, referencedTable, StringComparison.OrdinalIgnoreCase)))
-						continue;
-
-					// la tabella non è presente nella lista
-					if (!result.TryGetValue(referencedTable, out HashSet<string>? value))
-					{
-						value = new HashSet<string>();
-						result[referencedTable] = value;
-					}
-
-					value.Add(table.Name);
-				}
-			}
-
-			if (result.Count > 0)
-			{
-				var sb = new StringBuilder();
-				sb.AppendLine("The following tables are missing from the list:");
-				foreach (var item in result)
-				{
-					sb.AppendLine($"  - {item.Key} is referenced by {string.Join(", ", item.Value.Order())}");
-				}
-
-				errorMessage = sb.ToString();
-				return false;
-			}
-
-
-			errorMessage = string.Empty;
-			return true;
-		}
-
-
-		private static IReadOnlyList<Table> FindLeaves(IReadOnlyList<Table> tables) => tables.Where(x => x.IsLeaf).ToList();
-
-
-		private static bool TryManageCycles(List<Table> tables, MigrationStrategyResult result)
-		{
-			var graph = new Graph(tables);
-
-			var cycles = graph.FindAllCycles();
+			newGraph = graph;
+			
+			var cycles = newGraph.FindAllCycles();
 			if (cycles.Count == 0)
 			{
-				result.SetError($"The list contains {tables.Count} tables, but no cycles have been found, and no leafs are present. Please check with your admin.");
+				result.SetError($"The list contains {graph.NodeCount} tables, but no cycles have been found, and no leafs are present. Please check with your admin.");
 				return false;
 			}
 
 			if (cycles.Count == 1)
 			{
-				return TryBreakCycle(tables, cycles[0], result);
+				return TryBreakCycle(newGraph, cycles[0], result, out newGraph);
 			}
 
 			var autoCyclesSelfContained = cycles.Where(x => x.IsAutoCycle && x.IsSelfContained).ToList();
@@ -114,7 +70,7 @@ namespace Greg.Xrm.Command.DataExtractor.Services
 			{
 				foreach (var cycle in autoCyclesSelfContained)
 				{
-					if (!TryBreakCycle(tables, cycle, result))
+					if (!TryBreakCycle(newGraph, cycle, result, out newGraph))
 						return false;
 				}
 
@@ -126,7 +82,7 @@ namespace Greg.Xrm.Command.DataExtractor.Services
 			{
 				foreach (var cycle in selfContainedCycles)
 				{
-					if (!TryBreakCycle(tables, cycle, result))
+					if (!TryBreakCycle(newGraph, cycle, result, out newGraph))
 						return false;
 				}
 
@@ -136,7 +92,7 @@ namespace Greg.Xrm.Command.DataExtractor.Services
 
 
 			var sb = new StringBuilder();
-			sb.AppendLine($"The list contains still {tables.Count} tables, but {cycles.Count} cycle{(cycles.Count > 1 ? "s have" : "has")} been found that we don't know how to manage: ");
+			sb.AppendLine($"The list contains still {graph.NodeCount} tables, but {cycles.Count} cycle{(cycles.Count > 1 ? "s have" : "has")} been found that we don't know how to manage: ");
 			foreach (var cycle in cycles)
 			{
 				sb.AppendLine($"  - {string.Join(", ", cycle.Select(x => x.ToString()))}");
@@ -150,23 +106,21 @@ namespace Greg.Xrm.Command.DataExtractor.Services
 
 
 
-		private static bool TryBreakCycle(List<Table> tables, Cycle loop, MigrationStrategyResult result)
+		private static bool TryBreakCycle(DirectedGraph<TableModel> graph, Cycle<TableModel> loop, MigrationStrategyResult result, out DirectedGraph<TableModel> newGraph)
 		{
+			newGraph = graph;
+
 			if (loop.IsAutoCycle)
 			{
-				var item = loop[0];
-				var itemColumns = item.Columns
-					.Select(x => $"{x} ({item.ToTable})")
-					.ToArray();
+				var arc = loop[0];
+				var itemColumns = arc.GetAdditionalInfo<string[]>("columns")?
+					.Select(x => $"{x} ({arc.To})")
+					.ToArray() ?? Array.Empty<string>();
 
-				result.Add(new MigrationActionTableWithoutColumn(item.FromTable, string.Join(", ", itemColumns)));
-				result.Add(new MigrationActionUpdateTableColumn(item.FromTable, string.Join(", ", itemColumns)));
+				result.Add(new MigrationActionTableWithoutColumn(arc.From.ToString(), string.Join(", ", itemColumns)));
+				result.Add(new MigrationActionUpdateTableColumn(arc.From.ToString(), string.Join(", ", itemColumns)));
 
-				tables.Remove(tables.First(x => string.Equals(x.Name, item.FromTable, StringComparison.OrdinalIgnoreCase)));
-				foreach (var table in tables)
-				{
-					table.RemoveLookupsTowardsTables(new[] { item.FromTable });
-				}
+				newGraph = newGraph.Clone().RemoveNodes(arc.From.Content);
 
 				return true;
 			}
@@ -176,87 +130,60 @@ namespace Greg.Xrm.Command.DataExtractor.Services
 			IMigrationAction? lastMigrationAction = null;
 			for (int i = 0; i < loop.Count; i++)
 			{
-				var item = loop[i];
+				var arc = loop[i];
 
-				var tableToImport = tables.Find(x => string.Equals(x.Name, item.FromTable, StringComparison.OrdinalIgnoreCase));
-				if (tableToImport == null)
-				{
-					result.SetError($"Table {item.FromTable} not found in the list of tables.");
-					return false;
-				}
-
-				var itemColumns = item.Columns
-					.Select(x => $"{x} ({item.ToTable})")
-					.ToArray();
+				var tableToImport = arc.From;
+				var columns = arc.GetAdditionalInfo<string[]>("columns")?
+					.Select(x => $"{x} ({arc.To})")
+					.ToArray() ?? Array.Empty<string>();
 
 
 				if (i == 0)
 				{
 					if (tableToImport.HasAutoCycle)
 					{
-						var columns1 = (tableToImport.AutoCycle?.Columns ?? Array.Empty<string>())
-							.Select(x => $"{x} ({tableToImport.AutoCycle?.TableName})")
-								.ToArray();
-						var columns2 = columns1
-							.Union(itemColumns)
+						var columns1 = (tableToImport.AutoCycle?.GetAdditionalInfo<string[]>("columns") ?? Array.Empty<string>())
+							.Select(x => $"{x} ({tableToImport})")
 							.ToArray();
 
-						result.Add(new MigrationActionTableWithoutColumn(item.FromTable, string.Join(", ", columns2)));
-						result.Add(new MigrationActionUpdateTableColumn(item.FromTable, string.Join(", ", columns1)));
-						lastMigrationAction = new MigrationActionUpdateTableColumn(item.FromTable, string.Join(", ", itemColumns));
+						var columns2 = columns1
+							.Union(columns)
+							.ToArray();
+
+						result.Add(new MigrationActionTableWithoutColumn(arc.From.ToString(), string.Join(", ", columns2)));
+						result.Add(new MigrationActionUpdateTableColumn(arc.From.ToString(), string.Join(", ", columns1)));
+						lastMigrationAction = new MigrationActionUpdateTableColumn(arc.From.ToString(), string.Join(", ", columns));
 					}
 					else
 					{
-						result.Add(new MigrationActionTableWithoutColumn(item.FromTable, string.Join(", ", itemColumns)));
-						lastMigrationAction = new MigrationActionUpdateTableColumn(item.FromTable, string.Join(", ", itemColumns));
+						result.Add(new MigrationActionTableWithoutColumn(arc.From.ToString(), string.Join(", ", columns)));
+						lastMigrationAction = new MigrationActionUpdateTableColumn(arc.From.ToString(), string.Join(", ", columns));
 					}
 				}
 				else
 				{
 					if (tableToImport.HasAutoCycle)
 					{
-						var columns1 = (tableToImport.AutoCycle?.Columns ?? Array.Empty<string>())
-							.Select(x => $"{x} ({tableToImport.AutoCycle?.TableName})")
-								.ToArray();
+						var columns1 = (tableToImport.AutoCycle?.GetAdditionalInfo<string[]>("columns") ?? Array.Empty<string>())
+							.Select(x => $"{x} ({tableToImport})")
+							.ToArray();
 
-						result.Add(new MigrationActionTableWithoutColumn(item.FromTable, string.Join(", ", columns1)));
-						result.Add(new MigrationActionUpdateTableColumn(item.FromTable, string.Join(", ", columns1)));
+						result.Add(new MigrationActionTableWithoutColumn(arc.From.ToString(), string.Join(", ", columns1)));
+						result.Add(new MigrationActionUpdateTableColumn(arc.From.ToString(), string.Join(", ", columns1)));
 					}
 					else
 					{
-						result.Add(item.FromTable);
+						result.Add(arc.From.ToString());
 					}
 				}
 
-				tables.Remove(tables.First(x => string.Equals(x.Name, item.FromTable, StringComparison.OrdinalIgnoreCase)));
-				foreach (var table in tables)
-				{
-					table.RemoveLookupsTowardsTables(new[] { item.FromTable });
-				}
+				newGraph = newGraph.Clone().RemoveNodes(arc.From.Content);
 			}
+
 			if (lastMigrationAction != null)
 				result.Add(lastMigrationAction);
 
 			return true;
 		}
-
-		internal static void RemoveMissingDependencies(List<Table> tables)
-		{
-			var tableDict = tables.ToDictionary(x => x.Name);
-			foreach (var table in tables)
-			{
-				var tablesNotPresent = new List<string>();
-				foreach (var relatedTable in table.Fields.Select(x => x.TableName))
-				{
-					if (!tableDict.ContainsKey(relatedTable))
-					{
-						tablesNotPresent.Add(relatedTable);
-					}
-				}
-
-				table.RemoveLookupsTowardsTables(tablesNotPresent, true);
-			}
-		}
 	}
-
 }

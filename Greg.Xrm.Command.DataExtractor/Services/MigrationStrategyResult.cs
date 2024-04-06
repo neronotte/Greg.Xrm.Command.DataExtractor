@@ -22,7 +22,7 @@ namespace Greg.Xrm.Command.DataExtractor.Services
 
 		public List<IMigrationAction> MigrationActions { get; } = new List<IMigrationAction>();
 
-		public MigrationStrategyResult Add(string tableName)
+		public MigrationStrategyResult Add(string? tableName)
 		{
 			return this.Add(new MigrationActionFullTable(tableName));
 		}

@@ -2,7 +2,7 @@
 {
 	public class MigrationActionFullTable : IMigrationAction
 	{
-		public MigrationActionFullTable(string tableName)
+		public MigrationActionFullTable(string? tableName)
 		{
 			if (string.IsNullOrWhiteSpace(tableName))
 			{

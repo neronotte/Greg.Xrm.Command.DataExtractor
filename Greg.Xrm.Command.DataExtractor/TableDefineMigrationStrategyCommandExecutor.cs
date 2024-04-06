@@ -1,19 +1,16 @@
-﻿using Greg.Xrm.Command.DataExtractor.Model;
-using Greg.Xrm.Command.DataExtractor.Services;
+﻿using Greg.Xrm.Command.DataExtractor.Services;
 using Greg.Xrm.Command.Services.Connection;
 using Greg.Xrm.Command.Services.Output;
-using Microsoft.Xrm.Sdk.Messages;
-using Microsoft.Xrm.Sdk.Metadata;
 using Microsoft.Xrm.Sdk.Query;
 
 namespace Greg.Xrm.Command.DataExtractor
 {
-	public class DataTreeBuildCommandExecutor : ICommandExecutor<DataTreeBuildCommand>
+	public class TableDefineMigrationStrategyCommandExecutor : ICommandExecutor<TableDefineMigrationStrategyCommand>
 	{
 		private readonly IOutput output;
 		private readonly IOrganizationServiceRepository organizationServiceRepository;
 
-		public DataTreeBuildCommandExecutor(
+		public TableDefineMigrationStrategyCommandExecutor(
 			IOutput output,
 			IOrganizationServiceRepository organizationServiceRepository)
 		{
@@ -22,7 +19,7 @@ namespace Greg.Xrm.Command.DataExtractor
 		}
 
 
-		public async Task<CommandResult> ExecuteAsync(DataTreeBuildCommand command, CancellationToken cancellationToken)
+		public async Task<CommandResult> ExecuteAsync(TableDefineMigrationStrategyCommand command, CancellationToken cancellationToken)
 		{
 			this.output.Write($"Connecting to the current dataverse environment...");
 			var crm = await this.organizationServiceRepository.GetCurrentConnectionAsync();
@@ -38,6 +35,10 @@ namespace Greg.Xrm.Command.DataExtractor
 					return CommandResult.Fail("No solution name provided and no current solution name found in the settings. Please provide a solution name or set a current solution name in the settings.");
 				}
 			}
+
+
+
+
 
 
 			this.output.Write($"Retrieving tables from solution '{currentSolutionName}'...");
@@ -60,12 +61,6 @@ namespace Greg.Xrm.Command.DataExtractor
 
 
 
-
-
-
-
-
-
 			this.output.WriteLine("Retrieving tables metadata...");
 			query = new QueryExpression("entity");
 			query.ColumnSet.AddColumns("logicalname");
@@ -75,70 +70,40 @@ namespace Greg.Xrm.Command.DataExtractor
 			var tableNames = (await crm.RetrieveMultipleAsync(query))
 				.Entities
 				.Select(x => x.GetAttributeValue<string>("logicalname"))
+				.Select(x => x.ToLowerInvariant())
 				.ToArray();
 
 
-			if (!command.IncludeSecurityTables)
+
+
+			var tableGraphBuilder = new TableGraphBuilder(this.output);
+			var (missingTables, graph) = await tableGraphBuilder.BuildGraphAsync(crm, tableNames, command.IncludeSecurityTables, command.SkipMissingTables);
+
+
+
+			if (!command.SkipMissingTables && missingTables.HasMissingTables)
 			{
-				tableNames = tableNames.Except(SecurityTables.SecurityTableNames).ToArray();
+				return CommandResult.Fail(missingTables.ToString());
+
 			}
 
-			var tables = new List<Table>();
-			foreach (var tableName in tableNames)
+
+			this.output.WriteLine($"Found {graph.NodeCount} table metadata in solution '{currentSolutionName}':");
+			foreach (var table in graph)
 			{
-				var metadata = ((RetrieveEntityResponse)(await crm.ExecuteAsync(new RetrieveEntityRequest
-				{
-					LogicalName = tableName,
-					EntityFilters = EntityFilters.Attributes
-				}))).EntityMetadata;
-
-				var lookupList = metadata.Attributes.OfType<LookupAttributeMetadata>()
-					.SelectMany( x => x.Targets.Select(t => new LookupFieldModel(x.LogicalName, t)))
-					.Where( x => command.IncludeSecurityTables || !SecurityTables.SecurityTableNames.Contains(x.TableName))
-					.ToList();
-
-				var table = new Table(metadata.LogicalName, lookupList);
-				tables.Add(table);
-			}
-
-			this.output.WriteLine("Done", ConsoleColor.Green);
-
-			this.output.WriteLine($"Found {tables.Count} table metadata in solution '{currentSolutionName}':");
-			foreach (var table in tables)
-			{
-				this.output.WriteLine($"  - {table.Name}");
+				this.output.WriteLine($"  - {table}");
 			}
 			this.output.WriteLine();
-
-
-
-
-
-
-			if (command.SkipMissingTables)
-			{
-				MigrationStrategyBuilder.RemoveMissingDependencies(tables);
-			}
-			else
-			{
-				if (!MigrationStrategyBuilder.TryValidateRelationships(tables, out var errorMessage))
-				{
-					return CommandResult.Fail(errorMessage);
-				}
-			}
-
 			
+
+
+
+
 
 
 			this.output.WriteLine("Building the data tree...");
 
-			
-
-
-
-
-
-			var result = MigrationStrategyBuilder.Build(tables);
+			var result = MigrationStrategyBuilder.Build(graph);
 
 			if (result.MigrationActions.Count > 0)
 			{
@@ -164,9 +129,9 @@ namespace Greg.Xrm.Command.DataExtractor
 					if (command.Verbose)
 					{
 						var tableName = migrationAction.TableName;
-						var table = tables.Find(x => string.Equals(x.Name, tableName, StringComparison.OrdinalIgnoreCase));
+						var table = graph.TryGetNodeFor(tableName);
 
-						var dependsOn = table?.OriginalFields.Select(x => x.TableName).Distinct().ToArray() ?? Array.Empty<string>();
+						var dependsOn = table?.OutboundArcs.Select(x => x.To.Content.Key.ToString()).Distinct().ToArray() ?? Array.Empty<string>();
 						if (migrationAction is MigrationActionTableWithoutColumn ma)
 						{
 							dependsOn = dependsOn.Except(ma.GetRelatedTableNames() ).ToArray();

@@ -2,7 +2,7 @@
 {
 	public class MigrationActionTableWithoutColumn : IMigrationAction
 	{
-		public MigrationActionTableWithoutColumn(string tableName, string columnName)
+		public MigrationActionTableWithoutColumn(string? tableName, string columnName)
 		{
 			if (string.IsNullOrEmpty(tableName))
 			{
